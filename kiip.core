@@ -1,0 +1,171 @@
+#! /usr/bin/env bash
+# KIIP-TOOLS
+#----------------------------------------------------------------------#
+# kiip.core -- Script berisi fungsi-fungsi utama yang dapat digunakan
+#              untuk berbagai keperluan. Juga terdapat konfigurasi
+#----------------------------------------------------------------------#
+
+declare -r maxhistory=2
+declare file_history="/home/annahri/Personal/Scripts/kiip.hist"
+declare -a bitrates=(
+    "16K"
+    "24K"
+    "32K"
+    "64K"
+)
+
+# =============================================================== #
+# Set fungsi untuk
+# - Menambah ID3 tag
+# - Konversi * ke mp3
+# =============================================================== #
+daftar_asatidzah="/home/annahri/Personal/Scripts/asatidzah.txt"
+test -f $daftar_asatidzah || {
+    echo "File daftar asatidzah tidak ada."; exit 1
+}
+
+readarray -t asatidzah < $daftar_asatidzah
+
+setPemateri() {
+    local hist_pemateri="$file_history.pemateri"
+
+    heading "Asatidzah Pemateri"
+    if [[ -s $hist_pemateri ]]; then
+        local last=`tail -1 $hist_pemateri`
+        echo " Pemateri terakhir: $last"
+        read -p " Gunakan pengaturan ini? [y/n] " yn
+        [[ "$yn" =~ ^[yY]$ ]] && pemateri="$last" && return
+    fi
+
+    PS3='Pilih pemateri (ctrl+c untuk keluar): '
+    asatidzah+=("Input manual")
+    select ustadz in "${asatidzah[@]}"; do
+        case ${ustadz,,} in
+            *manual)
+                read -p " Nama pemateri: " pemateri
+                read -p " Tambah $pemateri ke daftar permanen? [Y]" yn
+                case $yn in
+                    [Yy]* )
+                        tee -a $daftar_asatidzah <<<"$pemateri" > /dev/null
+                        if [[ $? -eq 0 ]]; then
+                            tambahHistory pemateri "$pemateri"
+                            echo "Berhasil ditambahkan"
+                        fi
+                        ;;
+                    *) : ;;
+                esac
+                break
+                ;;
+            *)
+                pemateri="$ustadz"
+                tambahHistory pemateri "$pemateri"
+                break
+                ;;
+        esac
+    done
+}
+
+setPembahasan() {
+    : Penentuan pembahasan
+    local hist_pembahasan="$file_history.pembahasan"
+    heading "Materi Pembahasan"
+    if [[ -s $hist_pembahasan ]]; then
+        read -p " Gunakan pembahasan terakhir? [y/n]" yn
+        if [[ $yn =~ ^[Yy]$ ]]; then
+            readarray -t hist < $hist_pembahasan
+            select opt in "${hist[@]}"; do
+                pembahasan="$opt"
+                unset hist
+                break
+            done
+            return
+        fi
+    fi
+
+    if [[ -z $daftar_tema ]]; then
+        read -p " Materi pembahasan: " pembahasan
+        tambahHistory pembahasan "$pembahasan"
+    else
+    PS3=' Pilih kitab/tema pembahasan (ctrl+c untuk keluar): '
+    select tema in "${daftar_tema[@]}"; do
+        pembahasan="$tema"
+        tambahHistory pembahasan "$pembahasan"
+        break
+    done
+    fi
+}
+
+setJudul() {
+    : Penentuan judul rekaman
+    local hist_judul="$file_history.judul"
+    heading "Judul Kajian"
+    if [[ -s $hist_judul ]]; then
+        read -p " Gunakan judul terakhir? [N] " yn
+        if [[ $yn =~ ^[Yy]$ ]]; then
+            readarray -t hist < $hist_judul
+            PS3=' Pilih judul: '
+            select opt in "${hist[@]}"; do
+                judul="$opt"
+                unset hist
+                break
+            done
+            return
+        fi
+    else
+        echo "Belum ada history"
+    fi
+    read -p " Judul kajian: " judul
+    tambahHistory judul "$judul"
+}
+
+setUrutanBagian() {
+    : Penentuan Urutan Bagian
+    heading "Pembahasan bagian ke ..."
+    read -p " Pembahasan bagian ke: " bagian_ke
+}
+
+setBitrate() {
+    : Penentuan bitrate
+    heading "Bitrate"
+    bitrates+=("Input manual")
+    PS3=' Pilih bitrate: '
+    select opt in "${bitrates[@]}"; do
+        if [[ $opt =~ manual ]]; then
+            read -p " Bitrate: " bitrate
+            break
+        fi
+        bitrate="$opt" && break
+    done
+}
+
+setOutput() {
+    : Penentuan nama output
+    read -p " File output: " output
+}
+
+# =============================================================== #
+# Other
+# =============================================================== #
+heading() {
+    echo "#======= $@ =======#"
+}
+
+tambahHistory() {
+    local file="$file_history.$1"
+    tee -a $file <<<"$2" > /dev/null
+
+    local lines=`cat $file | wc -l`
+    if [[ $lines -gt $maxhistory ]]; then
+        tail -2 $file | sponge $file
+    fi
+}
+
+summary() {
+    echo "#===================================#"
+    echo "  Judul      : $judul"
+    echo "  Pemateri   : $pemateri"
+    echo "  Pembahasan : $pembahasan"
+    echo "  Bagian ke  : $bagian_ke"
+    echo "  Bitrate    : $bitrate"
+    echo "#===================================#"
+}

@@ -1,0 +1,57 @@
+#! /usr/bin/env bash
+# KIIP-TOOLS
+# kiip.aac -- Konversi rekaman aac ke mp3 dengan memberikan info id3a
+# versi 0.1
+
+source "/home/annahri/Personal/Scripts/kiip.core"
+
+declare judul pemateri pembahasan bagian_ke bitrate output
+
+convertToMp3() {
+    echo "Sedang mengkonversi..."
+    ffmpeg -i "$aac_file" -c copy -map_metadata -1 \
+        -loglevel quiet -hide_banner -stats \
+        -metadata title="$judul" \
+        -metadata artist="$pemateri" \
+        -metadata album="$pembahasan" \
+        -metadata track="$bagian_ke" \
+        -acodec libmp3lame -b:a "$bitrate" "$output"
+    e_status="$?"
+    [[ $e_status -gt 0 ]] && echo "Terjadi error." && exit 1
+    clear
+    echo "Selesai. Barakallahu fiikum"
+    ls -l "$output"
+}
+
+main() {
+    local ok=0
+    local aac_file="$1"
+    if [[ $aac_file && -f $aac_file ]]; then
+        : Lanjutkan
+    else
+        echo "File tidak ada."
+        exit 1
+    fi
+
+    echo "kiip-tool -- kiip.acc v0.1"
+    while [[ $ok -ne 1 ]]; do
+        setJudul
+        setPemateri
+        setPembahasan
+        setUrutanBagian
+        setBitrate
+        summary
+        read -p "Sudah benar? " yn
+        if [[ $yn =~ ^[Yy]$ || ${yn,,} == "ya" ]]; then
+            ok=1
+            setOutput
+        else
+            unset judul pemateri pembahasan bagian_ke bitrate
+        fi
+    done
+
+    convertToMp3
+}
+
+main "$@"
+exit 0

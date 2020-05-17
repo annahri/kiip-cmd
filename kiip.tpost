@@ -1,0 +1,87 @@
+#! /usr/bin/env bash
+#-------------------------------------#
+# kiip-cmd | kiip.tpost
+# ++ Mengirimkan postingan/audio ke channel telegram melalui bot
+#-------------------------------------#
+
+declare -r apiUrlAudio="https://api.telegram.org/bot$TELEGRAM_TOKEN/sendAudio?chat_id=$TELEGRAM_CHAT"
+declare -r audio="$1"
+declare message="$2"
+
+if [[ -z $TELEGRAM_TOKEN || -z $TELEGRAM_CHAT ]]; then
+    echo "Harap sediakan API BOT Telegram dan simpan di env"
+    exit 22
+fi
+
+sendAudio() {
+    local url="$apiUrlAudio -F audio=@$audio"
+
+    clear && echo "Sedang menunggah audio rekaman: ${audio##*/}"
+    response=`curl --progress-bar $url`
+
+    local status=$?
+
+    if [[ $status -ne 0 ]]; then
+        echo "Curl error."
+        exit 50
+    elif [[ "$(jq -r '.ok' <<< "$response")" != "true" ]]; then
+        echo "Telegram error."
+        jq -r '"\(.error_code): \(.description)"' <<< "$response"
+        echo "Keluar.."
+        exit 100
+    fi
+
+    echo "Selesai"
+}
+
+getMetadata() {
+    local get="$1"
+    ffprobe "$audio" 2>&1 | grep $get | cut -d: -f2 | awk '{$1=$1}1'
+}
+
+constructBody() {
+    local pemateri=`getMetadata artist`
+    local judul=`getMetadata title`
+    local pembahasan=`getMetadata album`
+
+    case "${pemateri,,}" in
+        *hafizhahullah*|*hafidzhahullah*) : ;;
+        *) pemateri="$pemateri hafizhahullah" ;;
+    esac
+
+    cat <<EOF > /tmp/payload.tmp
+`cat templates/header.audio.txt`
+
+🎙  $pemateri
+
+📅 *${hijri:-`hijri.sh`} H / ${masehi:-`LC=id-ID date +'%d %B %Y'`} M*
+📙 Materi pembahasan:
+*$judul*
+_${pembahasan}_
+
+`echo -e "\n$message\n"`
+
+`cat templates/footer.audio.txt`
+EOF
+
+    local ok=0
+    while [[ $ok -ne 1 ]]; do
+        clear
+        cat /tmp/payload.tmp
+        echo "~~~~~~~~~~~~~~~~"
+        read -p "Perlu revisi? [y/n] " yn
+        if [[ ! $yn =~ ^[yY]$ ]]; then break
+        else eval $EDITOR /tmp/payload.tmp; fi
+    done
+}
+
+main() {
+    constructBody
+    telegram.sh -M "$(cat /tmp/payload.tmp)"
+    sendAudio "$audio"
+
+    rm -f /tmp/payload.tmp
+}
+
+main $@
+exit 0

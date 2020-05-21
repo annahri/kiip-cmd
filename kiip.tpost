@@ -5,12 +5,17 @@
 #-------------------------------------#
 
 declare -r apiUrlAudio="https://api.telegram.org/bot$TELEGRAM_TOKEN/sendAudio?chat_id=$TELEGRAM_CHAT"
-declare -r audio="$1"
+declare -r audio="$(readlink -f $1)"
 declare message="$2"
 
 if [[ -z $TELEGRAM_TOKEN || -z $TELEGRAM_CHAT ]]; then
     echo "Harap sediakan API BOT Telegram dan simpan di env"
     exit 22
+fi
+
+if [[ ! -f $audio ]]; then
+    echo "File input tidak valid."
+    exit 11
 fi
 
 sendAudio() {
@@ -50,18 +55,18 @@ constructBody() {
     esac
 
     cat <<EOF > /tmp/payload.tmp
-`cat templates/header.audio.txt`
+`cat /home/annahri/KIIP/kiip-cmd/templates/header.audio.txt`
 
 🎙  $pemateri
 
-📅 *${hijri:-`hijri.sh`} H / ${masehi:-`LC=id-ID date +'%d %B %Y'`} M*
+📅 *${hijri:-`hijri.sh`} H / ${masehi:-`LANG=id_ID.UTF8 date +'%d %B %Y'`} M*
 📙 Materi pembahasan:
 *$judul*
 _${pembahasan}_
 
 `echo -e "\n$message\n"`
 
-`cat templates/footer.audio.txt`
+`cat /home/annahri/KIIP/kiip-cmd/templates/footer.audio.txt`
 EOF
 
     local ok=0
